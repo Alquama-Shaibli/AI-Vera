@@ -85,6 +85,16 @@ app.add_middleware(
 )
 
 
+# ── Root ───────────────────────────────────────────────────────────────
+@app.get("/")
+async def root():
+    return {
+        "engine": "Vera AI",
+        "status": "online",
+        "message": "magicpin Merchant Engagement Engine is running. Use /v1/healthz for details."
+    }
+
+
 # ── /v1/healthz ────────────────────────────────────────────────────────
 
 @app.get("/v1/healthz", response_model=HealthResponse)

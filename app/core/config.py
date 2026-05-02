@@ -32,7 +32,11 @@ REDIS_URL: Optional[str] = os.getenv("REDIS_URL", None)
 
 # ── Team metadata ──────────────────────────────────────────────────────
 TEAM_NAME: str = os.getenv("TEAM_NAME", "Vera-AI")
-TEAM_MEMBERS: list[str] = json.loads(os.getenv("TEAM_MEMBERS", '["Builder"]'))
+_raw_members = os.getenv("TEAM_MEMBERS", '["Builder"]')
+try:
+    TEAM_MEMBERS: list[str] = json.loads(_raw_members)
+except Exception:
+    TEAM_MEMBERS = ["Builder"]
 CONTACT_EMAIL: str = os.getenv("CONTACT_EMAIL", "builder@example.com")
 
 # ── Feature flags ──────────────────────────────────────────────────────
