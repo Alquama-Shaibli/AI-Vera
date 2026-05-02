@@ -102,6 +102,10 @@ def healthz():
 def metadata():
     return {
         "name": "Vera AI",
+        "version": "1.0.0",
+        "provider": "gemini",
+        "model": "gemini-2.5-flash",
+        "deterministic": True,
         "status": "running"
     }
 
