@@ -1,0 +1,20 @@
+.env
+.env.*
+__pycache__/
+*.pyc
+.pytest_cache/
+.venv/
+venv/
+*.log
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+
+# Project-specific
+dist/
+build/
+coverage/
+htmlcov/
+submission_v1.jsonl
+*.jsonl.bak
