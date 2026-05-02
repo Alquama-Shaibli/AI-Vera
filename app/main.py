@@ -87,43 +87,23 @@ app.add_middleware(
 
 # ── Root ───────────────────────────────────────────────────────────────
 @app.get("/")
-async def root():
-    return {
-        "engine": "Vera AI",
-        "status": "online",
-        "message": "magicpin Merchant Engagement Engine is running. Use /v1/healthz for details."
-    }
+def root():
+    return {"message": "Vera AI is online"}
 
 
 # ── /v1/healthz ────────────────────────────────────────────────────────
-
-@app.get("/v1/healthz", response_model=HealthResponse)
-async def healthz():
-    counts = _context_store.count_by_scope()
-    return HealthResponse(
-        status="ok",
-        uptime_seconds=int(time.time() - _start_time),
-        contexts_loaded=ContextCounts(**counts),
-    )
+@app.get("/v1/healthz")
+def healthz():
+    return {"status": "ok"}
 
 
 # ── /v1/metadata ───────────────────────────────────────────────────────
-
-@app.get("/v1/metadata", response_model=MetadataResponse)
-async def metadata():
-    return MetadataResponse(
-        team_name=TEAM_NAME,
-        team_members=TEAM_MEMBERS,
-        model=f"{LLM_PROVIDER}/{LLM_MODEL}",
-        approach=(
-            "Deterministic scoring engine + template-first generation with "
-            "LLM enhancement. 5-dimension optimised: specificity, category fit, "
-            "merchant fit, trigger relevance, engagement compulsion."
-        ),
-        contact_email=CONTACT_EMAIL,
-        version=VERSION,
-        submitted_at=datetime.now(timezone.utc).isoformat(),
-    )
+@app.get("/v1/metadata")
+def metadata():
+    return {
+        "name": "Vera AI",
+        "status": "running"
+    }
 
 
 # ── /v1/context ────────────────────────────────────────────────────────
