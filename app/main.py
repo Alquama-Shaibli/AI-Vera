@@ -62,8 +62,7 @@ def _get_composer() -> MessageComposer:
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    logger.info("Vera AI starting up…")
-    _get_composer()  # pre-init composer
+    logger.info("Vera AI starting up (Instant Mode)…")
     yield
     logger.info("Vera AI shutting down.")
 
