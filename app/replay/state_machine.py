@@ -1,6 +1,12 @@
 """
-Replay State Machine — handles multi-turn merchant conversations.
-Detects: auto-replies, intent transitions, hostile messages, off-topic.
+Replay State Machine — multi-turn merchant conversations.
+
+Designed to feel like an experienced human account strategist:
+- Selective, not chatty
+- Contextually aware across turns
+- Momentum-based, not repetitive
+- Calm authority, not robotic compliance
+- Hard exits on hostility, soft pause on hesitation
 """
 from __future__ import annotations
 
@@ -40,15 +46,22 @@ COMMITMENT_PATTERNS = [
 HOSTILE_PATTERNS = [
     r"stop (mess?aging|contact|spam)",
     r"do not (contact|message|call|text)",
-    r"spam", r"waste of time", r"not interested",
+    r"\bspam\b", r"waste of time", r"not interested",
     r"remove (me|my number)", r"unsubscribe",
     r"band karo", r"mat karo", r"nahin chahiye",
-    r"leave me alone", r"block", r"report", r"don'?t text", r"no thanks"
+    r"leave me alone", r"\bblock\b", r"\breport\b", r"don'?t text", r"no thanks",
+]
+
+HESITATION_PATTERNS = [
+    r"next week", r"later", r"not now", r"\bbusy\b",
+    r"thoda baad", r"abhi nahi", r"let me check",
+    r"will think", r"sochna padega", r"maybe", r"not sure",
+    r"let me talk", r"discuss with",
 ]
 
 OFF_TOPIC_PATTERNS = [
-    r"weather", r"cricket", r"ipl score",
-    r"loan", r"insurance", r"job",
+    r"weather", r"cricket score", r"ipl score",
+    r"loan", r"insurance", r"\bjob\b",
     r"who are you", r"aap kaun",
 ]
 
@@ -65,6 +78,11 @@ def _detect_intent(message: str) -> str:
         if re.search(pat, msg, re.IGNORECASE):
             return "hostile"
 
+    # Check hesitation before commitment — "maybe not now" should be hesitation
+    for pat in HESITATION_PATTERNS:
+        if re.search(pat, msg, re.IGNORECASE):
+            return "hesitation"
+
     for pat in COMMITMENT_PATTERNS:
         if re.search(pat, msg, re.IGNORECASE):
             return "commitment"
@@ -79,27 +97,24 @@ def _detect_intent(message: str) -> str:
     return "neutral"
 
 
-# ── Graceful responses ─────────────────────────────────────────────────
+# ── Helper: operator-tone merchant greeting ────────────────────────────
 
-GRACEFUL_EXIT = ""  # Hard terminal state - no follow up
+def _first_name(merchant: dict) -> str:
+    return merchant.get("identity", {}).get("owner_first_name", "")
 
-HOSTILE_EXIT = ""  # Hard terminal state - no persuasion
 
-AUTO_REPLY_PROBE = (
-    "Looks like that may have been an auto-reply. "
-    "If you're the owner, I'm here to handle the operational updates discussed. Proceed?"
-)
+def _locality(merchant: dict) -> str:
+    return merchant.get("identity", {}).get("locality", "")
 
-OFF_TOPIC_REDIRECT = (
-    "That's outside my operational scope. "
-    "I'm here to execute profile and engagement updates. Ready to proceed with the planned update?"
-)
+
+def _category_slug(merchant: dict) -> str:
+    return merchant.get("category_slug", "")
 
 
 class ReplayStateMachine:
     """Manages multi-turn conversation flow for merchant replies."""
 
-    MAX_AUTO_REPLIES = 2  # end after this many consecutive auto-replies
+    MAX_AUTO_REPLIES = 2
 
     def __init__(self, context_store, conversation_store, suppression_store):
         self._ctx = context_store
@@ -127,11 +142,11 @@ class ReplayStateMachine:
                 customer_id=customer_id,
             )
 
-        # Already ended
+        # Already ended — hard wall
         if self._convs.is_ended(conversation_id):
             return ReplyResponse(action="end", body="", rationale="Conversation already closed")
 
-        # Set strategy locking on first merchant reply
+        # Lock strategy on first merchant reply
         if not conv.get("current_strategy"):
             trigger = self._ctx.get("trigger", conv.get("trigger_id", ""))
             kind = trigger.get("kind", "unknown") if trigger else "unknown"
@@ -141,136 +156,312 @@ class ReplayStateMachine:
         self._convs.add_turn(conversation_id, "merchant", message)
 
         intent = _detect_intent(message)
-        logger.info(f"conv={conversation_id} turn={turn_number} intent={intent} strategy={conv.get('current_strategy')}")
+        merchant = self._ctx.get("merchant", merchant_id) or {}
+        logger.info(
+            f"conv={conversation_id} turn={turn_number} intent={intent} "
+            f"strategy={conv.get('current_strategy')}"
+        )
 
-        # ── Auto-reply hell ────────────────────────────────────────────
+        # ── Auto-reply ─────────────────────────────────────────────────
         if intent == "auto_reply":
             count = self._convs.increment_auto_reply(conversation_id)
             if count >= self.MAX_AUTO_REPLIES:
                 self._convs.set_state(conversation_id, "ended")
-                logger.info(f"Auto-reply limit reached for {conversation_id}")
                 return ReplyResponse(
                     action="end",
                     body="",
-                    rationale=f"Detected {count} consecutive auto-replies — ending gracefully",
+                    rationale=f"Auto-reply limit ({count}) reached — ending",
                 )
-            if count == 1:
-                # Probe once
-                body = AUTO_REPLY_PROBE
-                self._convs.add_turn(conversation_id, "vera", body)
-                return ReplyResponse(
-                    action="send",
-                    body=body,
-                    cta="binary_yes_no",
-                    rationale="Auto-reply detected — probing once before exit",
-                )
-            return ReplyResponse(action="wait", wait_seconds=3600,
-                                 rationale="Second auto-reply — waiting")
+            # Probe once — natural, not corporate
+            name = _first_name(merchant)
+            body = (
+                f"Looks like that went to an auto-reply{f', {name}' if name else ''}. "
+                f"If you're available, I had a quick update on your profile — worth 2 minutes?"
+            )
+            self._convs.add_turn(conversation_id, "vera", body)
+            return ReplyResponse(
+                action="send",
+                body=body,
+                cta="binary_yes_no",
+                rationale="Auto-reply — probing once",
+            )
 
-        # ── Hostile / stop (HARD TERMINAL STATE) ────────────────────────
+        # ── Hostile / stop — HARD TERMINAL, empty body ─────────────────
         if intent == "hostile":
             self._convs.set_state(conversation_id, "ended")
-            self._convs.add_turn(conversation_id, "vera", HOSTILE_EXIT)
+            return ReplyResponse(action="end", body="", rationale="Hostile — hard exit")
+
+        # ── Hesitation — read timing, reduce pressure ───────────────────
+        if intent == "hesitation":
+            body = self._generate_hesitation_response(conv, merchant, message)
+            self._convs.set_state(conversation_id, "waiting")
+            self._convs.add_turn(conversation_id, "vera", body)
             return ReplyResponse(
-                action="end",
-                body=HOSTILE_EXIT,
-                rationale="Hostile message — graceful exit",
+                action="wait",
+                wait_seconds=86400 * 3,
+                body=body,
+                rationale="Hesitation — reducing pressure, noting timing",
             )
 
-        # ── Commitment → action mode ───────────────────────────────────
+        # ── Commitment → operational execution ─────────────────────────
         if intent == "commitment":
             self._convs.set_state(conversation_id, "action_mode")
-            action_body = self._generate_action_mode_response(conv, merchant_id, customer_id)
-            self._convs.add_turn(conversation_id, "vera", action_body)
+            body = self._generate_action_mode_response(conv, merchant, customer_id)
+            self._convs.add_turn(conversation_id, "vera", body)
             return ReplyResponse(
                 action="send",
-                body=action_body,
+                body=body,
                 cta="none",
-                rationale="Commitment detected — operational execution",
+                rationale="Commitment — operational execution",
             )
-            
-        # ── Soft decline (Wait) ─────────────────────────────────────────
-        if any(x in message.lower() for x in ["next week", "later", "not now", "busy"]):
-             self._convs.set_state(conversation_id, "waiting")
-             body = "Understood. I will pause this execution for now."
-             self._convs.add_turn(conversation_id, "vera", body)
-             return ReplyResponse(
-                 action="wait",
-                 wait_seconds=86400 * 7,
-                 body=body,
-                 rationale="Soft decline — pausing execution"
-             )
 
-        # ── Off-topic → redirect ───────────────────────────────────────
+        # ── Off-topic — minimal redirect, not preachy ──────────────────
         if intent == "off_topic":
-            self._convs.add_turn(conversation_id, "vera", OFF_TOPIC_REDIRECT)
+            name = _first_name(merchant)
+            body = (
+                f"That's outside what I track{f', {name}' if name else ''}. "
+                f"Picking up where we left off — want me to move forward?"
+            )
+            self._convs.add_turn(conversation_id, "vera", body)
             return ReplyResponse(
                 action="send",
-                body=OFF_TOPIC_REDIRECT,
+                body=body,
                 cta="binary_yes_no",
-                rationale="Off-topic — operational redirect",
+                rationale="Off-topic — minimal redirect",
             )
 
-        # ── Engaged reply — continue conversation ──────────────────────
-        body = self._generate_continuation(conv, merchant_id, customer_id, message, composer)
+        # ── Engaged — contextual continuation ──────────────────────────
+        body = self._generate_continuation(conv, merchant, customer_id, message)
         self._convs.add_turn(conversation_id, "vera", body)
         return ReplyResponse(
             action="send",
             body=body,
             cta="open_ended",
-            rationale="Engaged reply — continuing locked strategy",
+            rationale="Engaged — continuing with strategy context",
         )
-        
-    def _generate_action_mode_response(self, conv: dict, merchant_id: str, customer_id: Optional[str]) -> str:
-        """Generate an operational task-advancement response, strictly adhering to the strategy."""
+
+    # ── Hesitation response ────────────────────────────────────────────
+
+    def _generate_hesitation_response(
+        self, conv: dict, merchant: dict, message: str
+    ) -> str:
+        """
+        Interpret the hesitation and acknowledge it with timing intelligence.
+        Reduces pressure without abandoning the opportunity.
+        """
+        strategy = conv.get("current_strategy", "")
+        name = _first_name(merchant)
+        slug = _category_slug(merchant)
+        msg_lower = message.lower()
+
+        name_prefix = f"{name}, " if name else ""
+
+        # Detect timing cue
+        if "next week" in msg_lower:
+            when = "next week"
+        elif "busy" in msg_lower:
+            when = "later this week"
+        elif "later" in msg_lower or "baad" in msg_lower:
+            when = "when it's a better time"
+        else:
+            when = "when you're ready"
+
+        # Strategy-aware timing context
+        time_notes = {
+            "festival_upcoming": f"Worth keeping in mind — the window closes about 2 days before the festival.",
+            "perf_dip": f"I'll hold it for now. The profile will keep running at current settings.",
+            "renewal_due": f"Your subscription is still active — I'll check in before the expiry date.",
+            "competitor_opened": f"Noted. I'll monitor the local picture and flag anything material.",
+            "review_theme_emerged": f"Your ratings are stable for now — no urgency here.",
+            "supply_alert": f"The compliance notice is still relevant — I'll flag when it gets closer to deadline.",
+        }
+        context_note = time_notes.get(strategy, "")
+
+        body = (
+            f"{name_prefix}Understood — I'll hold this until {when}. "
+            f"{context_note}".strip()
+        )
+        return body.rstrip()
+
+    # ── Action mode: operational execution response ────────────────────
+
+    def _generate_action_mode_response(
+        self, conv: dict, merchant: dict, customer_id: Optional[str]
+    ) -> str:
+        """
+        Respond to a commitment with a natural, operational next step.
+        Feels like a strategist confirming they've picked up the task.
+        NOT robotic, NOT corporate IT language.
+        """
         strategy = conv.get("current_strategy", "unknown")
-        
-        # Operational task-advancement responses
-        if strategy == "regulation_change":
-            return "I will prepare the compliance checklist and SOP notes first so your staff can review them."
-        elif strategy == "supply_alert":
-            return "I have flagged the affected stock batches on your profile. Operations team notified."
-        elif strategy == "gbp_unverified":
-            return "Initiating verification sequence. Look out for the postcard/call from Google shortly."
-        elif strategy == "review_theme_emerged":
-            return "Drafting a professional public response now. Will execute in 1 hour."
-        elif customer_id and strategy in ["recall_due", "trial_followup", "appointment_tomorrow"]:
-            return "Done. The slot has been blocked. Clinic confirmation usually goes out shortly."
-            
-        return "Noted. I am queueing the update for your profile now."
+        name = _first_name(merchant)
+        loc = _locality(merchant)
+        slug = _category_slug(merchant)
+
+        loc_str = f" in {loc}" if loc else ""
+
+        responses = {
+            "regulation_change": (
+                f"On it. I'll compile the key protocol points and a staff notice — "
+                f"should be ready before clinic hours tomorrow."
+            ),
+            "supply_alert": (
+                f"Flagging the affected batches now. "
+                f"I'll also update your profile status so customers{loc_str} see the advisory."
+            ),
+            "gbp_unverified": (
+                f"Starting the verification steps. "
+                f"You'll likely get a call or postcard from Google within a few days — "
+                f"keep an eye out for it."
+            ),
+            "review_theme_emerged": (
+                f"I'll draft the response based on your usual tone. "
+                f"Worth a quick read before it goes live."
+            ),
+            "perf_dip": (
+                f"Updating your listing timing and offer priority now. "
+                f"Should start showing in local results by this evening."
+            ),
+            "competitor_opened": (
+                f"Adjusting your positioning and refreshing the offer. "
+                f"I'll track how it affects your local search rank this week."
+            ),
+            "milestone_reached": (
+                f"Queuing the post now — evening tends to get the most engagement{loc_str}. "
+                f"I'll let you know once it's live."
+            ),
+            "festival_upcoming": (
+                f"Locking in the offer before the search traffic picks up. "
+                f"I'll update the listing tonight."
+            ),
+            "renewal_due": (
+                f"Sending the renewal link now. "
+                f"Your current visibility settings stay intact through the transition."
+            ),
+            "winback_eligible": (
+                f"Building the customer list now. "
+                f"I'll keep the message short and personalised — should go out this evening."
+            ),
+        }
+
+        # Customer-context strategies (appointment, recall, etc.)
+        if customer_id and strategy in ["recall_due", "trial_followup", "appointment_tomorrow"]:
+            if slug == "dentists":
+                return "Slot confirmed. I'll send the appointment reminder an hour before."
+            elif slug == "gyms":
+                return "Session noted. I'll send the confirmation now."
+            else:
+                return "Confirmed. I'll send the booking details shortly."
+
+        body = responses.get(strategy, f"Moving on it now. I'll update you once it's done.")
+        return body
+
+    # ── Engaged continuation: momentum-based, not repetitive ──────────
 
     def _generate_continuation(
         self,
         conv: dict,
-        merchant_id: str,
+        merchant: dict,
         customer_id: Optional[str],
         message: str,
-        composer,
     ) -> str:
-        """Generate a contextual continuation response while strictly maintaining the strategy lock."""
+        """
+        Continue the conversation naturally.
+        - Reads actual turns for momentum
+        - References merchant context
+        - Avoids repeating previous questions or CTAs
+        - Knows when to wrap up
+        """
         conversation_id = conv["conversation_id"]
-        merchant = self._ctx.get("merchant", merchant_id) or {}
-        owner = merchant.get("identity", {}).get("owner_first_name", "")
-        
-        # Count turns to avoid dragging on
         turns = conv.get("turns", [])
+        strategy = conv.get("current_strategy", "unknown")
+        name = _first_name(merchant)
+        slug = _category_slug(merchant)
+        loc = _locality(merchant)
+
+        # Hard exit if conversation running long
         if len(turns) >= 8:
             self._convs.set_state(conversation_id, "ended")
-            return GRACEFUL_EXIT
+            return ""
 
-        strategy = conv.get("current_strategy", "unknown")
-        
-        # Semantic lock enforcement
-        if strategy == "regulation_change":
-            return "This requires DCI documentation. Shall I list out the required SOP items?"
-        elif strategy == "supply_alert":
-            return "We need to ensure compliance immediately. Shall I post the stock update?"
-        elif strategy == "cde_opportunity":
-            return "I can add the schedule to your calendar to secure your CDE credits."
-        elif strategy == "perf_dip":
-            return "We need to counteract the visibility drop today. Ready to proceed with the profile update?"
-        elif strategy == "competitor_opened":
-            return "It is critical to maintain impression share. Shall I deploy the targeted response?"
-            
-        # Fallback operational response
-        return "Understood. Should I proceed with the execution?"
+        loc_str = f" in {loc}" if loc else ""
+        name_prefix = f"{name}, " if name else ""
+
+        # Check what the merchant said — look for questions or context
+        msg_lower = message.lower()
+        vera_turns = [t["body"] for t in turns if t["role"] == "vera"]
+        last_vera = vera_turns[-1] if vera_turns else ""
+
+        # Detect if merchant is asking about pricing
+        if any(w in msg_lower for w in ["price", "cost", "kitna", "how much", "charge", "fee"]):
+            if slug == "dentists":
+                return (
+                    f"{name_prefix}Pricing for most recall and cleaning packages is visible on your profile. "
+                    f"Want me to review the listed rates to make sure they reflect current clinic pricing?"
+                )
+            elif slug == "gyms":
+                return (
+                    f"{name_prefix}Your membership tiers are on the profile. "
+                    f"Worth checking if the trial pricing is still competitive with nearby studios."
+                )
+            else:
+                return (
+                    f"{name_prefix}Your current listed pricing should be visible to nearby customers. "
+                    f"Want me to check it's up to date?"
+                )
+
+        # Detect if merchant is asking about timing
+        if any(w in msg_lower for w in ["when", "kab", "how long", "kitne din", "timeline"]):
+            timing_map = {
+                "festival_upcoming": "Typically takes about an hour to show in local search — worth doing it today.",
+                "perf_dip": "Profile updates usually reflect within a few hours. Evening is the best window.",
+                "renewal_due": "Renewal links go through immediately — no delay in visibility.",
+                "gbp_unverified": "Google verification usually takes 5-7 days depending on the method.",
+            }
+            return timing_map.get(
+                strategy,
+                f"{name_prefix}Updates typically show in local search within a few hours. "
+                f"Best to go live before evening traffic picks up{loc_str}."
+            )
+
+        # Strategy-specific contextual continuations
+        continuations = {
+            "regulation_change": (
+                f"{name_prefix}The key item is updating your SOP before the deadline. "
+                f"Do you have staff who handle the documentation side, or should I keep it simple?"
+            ),
+            "supply_alert": (
+                f"{name_prefix}The main thing is the customer-facing notice — "
+                f"that protects you if anyone asks. Ready to go?"
+            ),
+            "perf_dip": (
+                f"{name_prefix}The visibility gap is mainly in peak-hour local search{loc_str}. "
+                f"Fixing the listing timing and reactivating one offer should close most of it."
+            ),
+            "competitor_opened": (
+                f"{name_prefix}The fastest counter is usually a refreshed offer and a post this week. "
+                f"Anything you'd want to lead with?"
+            ),
+            "review_theme_emerged": (
+                f"{name_prefix}The pattern in the reviews suggests customers want faster follow-up. "
+                f"A short response addressing that typically shifts the perception."
+            ),
+            "milestone_reached": (
+                f"{name_prefix}A post now will catch the evening browsing window{loc_str}. "
+                f"Want me to keep the caption short, or include a current offer?"
+            ),
+            "gbp_unverified": (
+                f"{name_prefix}The quickest route is usually the postcard — takes about 5 days. "
+                f"Want me to walk you through the steps right now?"
+            ),
+            "festival_upcoming": (
+                f"{name_prefix}The search spike usually starts 2-3 days before. "
+                f"What service or deal makes most sense to lead with this time?"
+            ),
+        }
+
+        body = continuations.get(
+            strategy,
+            f"{name_prefix}Happy to take the next step — what would be most useful right now?"
+        )
+        return body

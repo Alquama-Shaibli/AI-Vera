@@ -70,7 +70,6 @@ def _perf_dip(cat, m, trg, cust):
     p = trg.get("payload", {})
     dv = p.get("delta_pct", _dv(m))
     dc = _dc(m)
-    # Guard: only fire if actually a dip
     if dv >= 0 and dc >= 0:
         return _curious_ask(cat, m, trg, cust)
     owner = _owner(m, cat)
@@ -79,12 +78,11 @@ def _perf_dip(cat, m, trg, cust):
     gap = round((peer - my) * 100, 1) if peer > my else 0
     metric = p.get("metric", "calls")
     baseline = p.get("vs_baseline", _calls(m))
-    body = (f"{owner}, critical update: your {metric} dropped {_pct(abs(dv))} this week "
-            f"(down from {baseline}). "
-            f"Your CTR is now {my:.1%} vs the {peer:.1%} peer median in {_loc(m)}"
-            f"{f' — a {gap}pp gap' if gap > 0 else ''}. "
-            f"Impression share is slipping to local competitors. I have an immediate fix queued. Deploy it tonight?")
-    return {"body": body, "cta": "binary_yes_no", "rationale": "Perf dip — loss aversion + execution"}
+    gap_str = f" — {gap}pp behind the local average" if gap > 0 else ""
+    body = (f"{owner}, your {metric} dipped {_pct(abs(dv))} this week (from {baseline}). "
+            f"CTR sitting at {my:.1%} vs {peer:.1%} for {_loc(m)} peers{gap_str}. "
+            f"Two quick listing fixes should recover most of it — worth doing tonight?")
+    return {"body": body, "cta": "binary_yes_no", "rationale": "Perf dip — grounded loss aversion"}
 
 
 def _perf_spike(cat, m, trg, cust):
@@ -94,11 +92,11 @@ def _perf_spike(cat, m, trg, cust):
     driver = p.get("likely_driver", "")
     owner = _owner(m, cat)
     offs = _offers(m)
-    driver_str = f" The {driver.replace('_',' ')} update drove this." if driver else ""
-    offer_str = f" I will attach '{offs[0]}' to the active listing." if offs else " I will activate a flash offering to maximize conversion."
-    body = (f"{owner}, local search traffic spiked — calls are up {_pct(abs(dv))} this week (baseline: {baseline}).{driver_str}"
-            f" We have a 48h window to capture this traffic anomaly.{offer_str} Execute?")
-    return {"body": body, "cta": "binary_yes_no", "rationale": "Perf spike — momentum + execution"}
+    driver_str = f" Looks like the {driver.replace('_',' ')} change drove it." if driver else ""
+    offer_str = f" Attaching '{offs[0]}' to catch the traffic." if offs else " Worth activating an offer while it lasts."
+    body = (f"{owner}, calls are up {_pct(abs(dv))} this week — from {baseline} baseline.{driver_str}"
+            f" Good window to lock in a few conversions.{offer_str} Move on it?")
+    return {"body": body, "cta": "binary_yes_no", "rationale": "Perf spike — momentum + timing"}
 
 
 def _recall_due(cat, m, trg, cust):
@@ -133,14 +131,13 @@ def _milestone_reached(cat, m, trg, cust):
     peer = _peer_rev(cat)
     loc = _loc(m)
     if is_imminent and val_now and milestone:
-        body = (f"{owner}, you're at {val_now} {metric} — {milestone - val_now} away from the {milestone} mark. "
-                f"Competitors in {loc} average {peer}. Hitting this milestone this week will lock in your top-3 ranking. "
-                f"I've prepped a targeted review-generation push. Deploy?")
+        body = (f"{owner}, you're at {val_now} {metric} — {milestone - val_now} away from {milestone}. "
+                f"Peers in {loc} average {peer}. A post this week should get you there. Want me to draft one?")
     else:
         body = (f"{owner}, you crossed {milestone} {metric}. "
-                f"Peers in {loc} average {peer}. This algorithmic advantage will decay if we don't capitalize. "
-                f"I've prepared an operational update to lock in your ranking. Deploy?")
-    return {"body": body, "cta": "binary_yes_no", "rationale": "Milestone — social proof + algorithmic urgency"}
+                f"Peers in {loc} average {peer} — you're tracking well. "
+                f"Good time for a post to hold the momentum. Want me to draft one?")
+    return {"body": body, "cta": "binary_yes_no", "rationale": "Milestone — measured momentum"}
 
 
 def _dormant(cat, m, trg, cust):
@@ -149,31 +146,31 @@ def _dormant(cat, m, trg, cust):
     last = p.get("last_topic", "")
     owner = _owner(m, cat)
     views = _views(m)
-    last_str = f" We paused after discussing {last.replace('_',' ')}." if last else ""
+    last_str = f" Last time we were looking at {last.replace('_',' ')}." if last else ""
     body = (f"{owner}, it's been {days} days.{last_str} "
-            f"{views:,} local users scanned your profile this month without an update. We are losing impression share. "
-            f"What is your highest-margin service this week to push?")
-    return {"body": body, "cta": "open_ended", "rationale": "Dormant re-engagement — opportunity cost"}
+            f"Your profile is still pulling {views:,} views this month — people are checking. "
+            f"What's your highest-value service right now?")
+    return {"body": body, "cta": "open_ended", "rationale": "Dormant — natural re-engagement"}
 
 
 def _competitor(cat, m, trg, cust):
     p = trg.get("payload", {})
-    comp = p.get("competitor_name", "a competitor")
+    comp = p.get("competitor_name", "a new place")
     dist = p.get("distance_km", "")
     their_offer = p.get("their_offer", "")
     owner = _owner(m, cat)
     peer = _peer_rev(cat)
-    dist_str = f"{dist}km" if dist and dist != "nearby" else "nearby"
+    dist_str = f"{dist}km away" if dist and dist != "nearby" else "nearby"
     my_offs = _offers(m)
-    offer_cmp = ""
+    offer_str = ""
     if their_offer and my_offs:
-        offer_cmp = f" They are aggressive at {their_offer}; your visible offer is {my_offs[0]}."
+        offer_str = f" They're leading with {their_offer}; your '{my_offs[0]}' is positioned differently — worth making sure it's visible."
     elif their_offer:
-        offer_cmp = f" They are anchoring with {their_offer}."
-    body = (f"{owner}, urgent local shift: {comp} launched {dist_str} on Google.{offer_cmp} "
-            f"Competitors in {_loc(m)} average {peer} reviews. If we don't counter, they will absorb your local search volume. "
-            f"I have a counter-positioning update ready. Deploy?")
-    return {"body": body, "cta": "binary_yes_no", "rationale": "Competitor alert — severe loss aversion"}
+        offer_str = f" They're leading with {their_offer}."
+    body = (f"{owner}, heads up — {comp} just listed {dist_str} on Google.{offer_str} "
+            f"{_loc(m)} peers average {peer} reviews. "
+            f"A refreshed post this week keeps you visible to anyone comparing nearby. Want to move on it?")
+    return {"body": body, "cta": "binary_yes_no", "rationale": "Competitor — grounded competitive awareness"}
 
 
 def _festival(cat, m, trg, cust):
@@ -182,10 +179,10 @@ def _festival(cat, m, trg, cust):
     days = p.get("days_away", p.get("days_until", 7))
     owner = _owner(m, cat)
     offs = _offers(m)
-    offer_str = f" I will lock '{offs[0]}' as the featured {festival} tier." if offs else f" I will deploy a targeted {festival} tier."
-    body = (f"{owner}, {festival} is {days} days away. Search volume in your sector will spike 35-50% in the next 48h.{offer_str} "
-            f"Execute the local SEO update now before competitors do?")
-    return {"body": body, "cta": "binary_yes_no", "rationale": "Festival window — operational urgency"}
+    offer_str = f" Thinking of leading with '{offs[0]}' — fits the occasion well." if offs else f" Worth putting a {festival} deal live now."
+    body = (f"{owner}, {festival} is {days} days out — search traffic typically picks up 2-3 days before.{offer_str} "
+            f"Get the listing updated this week?")
+    return {"body": body, "cta": "binary_yes_no", "rationale": "Festival — calm timing-aware urgency"}
 
 
 def _review_theme(cat, m, trg, cust):
@@ -195,12 +192,12 @@ def _review_theme(cat, m, trg, cust):
     trend = p.get("trend", "")
     quote = p.get("common_quote", "")
     owner = _owner(m, cat)
-    trend_str = f" ({trend} trend)" if trend else ""
-    quote_str = f' (e.g. "{quote[:50]}")' if quote else ""
-    body = (f"{owner}, {count} reviews this month flagged '{theme}'{trend_str}{quote_str}. "
-            f"Public unresponsiveness degrades conversion by ~12%. I've generated a compliant, professional public response to mitigate this. "
-            f"Deploy immediately?")
-    return {"body": body, "cta": "binary_yes_no", "rationale": "Review theme — operational mitigation"}
+    trend_str = f" — {trend}" if trend else ""
+    quote_str = f' (like: "{quote[:50]}")' if quote else ""
+    body = (f"{owner}, {count} reviews this month mention '{theme}'{trend_str}{quote_str}. "
+            f"A well-placed public reply to those usually shifts the perception over the next few weeks. "
+            f"Want me to draft one for you to review?")
+    return {"body": body, "cta": "binary_yes_no", "rationale": "Review theme — trust + reputation"}
 
 
 def _renewal(cat, m, trg, cust):
@@ -211,10 +208,10 @@ def _renewal(cat, m, trg, cust):
     owner = _owner(m, cat)
     views = _views(m)
     amt_str = f" (₹{amount:,})" if isinstance(amount, int) and amount else ""
-    body = (f"{owner}, operational alert: your {plan} tier expires in {days} days{amt_str}. "
-            f"You captured {views:,} profile views this cycle. A drop to free tier will immediately halve this traffic. "
-            f"Shall I issue the renewal link to secure your visibility?")
-    return {"body": body, "cta": "binary_yes_no", "rationale": "Renewal — severe loss aversion"}
+    body = (f"{owner}, your {plan} plan renews in {days} days{amt_str}. "
+            f"You're at {views:,} profile views this month — that visibility is tied to the active plan. "
+            f"Want me to send the renewal link?")
+    return {"body": body, "cta": "binary_yes_no", "rationale": "Renewal — calm retention"}
 
 
 def _chronic_refill(cat, m, trg, cust):
@@ -266,27 +263,26 @@ def _winback(cat, m, trg, cust):
                    m.get("customer_aggregate", {}).get("lapsed_count", 0))
     dip = p.get("perf_dip_pct", 0)
     owner = _owner(m, cat)
-    dip_str = f" Profile views also degraded {_pct(abs(dip))} in parallel." if dip else ""
-    body = (f"{owner}, {lapsed} customers fell into the 'lapsed' cohort in the last 30 days.{dip_str} "
-            f"Competitors are currently retargeting them. I have built a silent reactivation protocol that normally recovers 15-20%. "
-            f"Execute the protocol?")
-    return {"body": body, "cta": "binary_yes_no", "rationale": "Winback — defensive retention"}
+    dip_str = f" Profile views also slipped {_pct(abs(dip))} over the same period." if dip else ""
+    body = (f"{owner}, {lapsed} customers drifted out over the last 30 days.{dip_str} "
+            f"A short personalised message to that group typically brings back 15-20%. "
+            f"Worth a try this week?")
+    return {"body": body, "cta": "binary_yes_no", "rationale": "Winback — calm reactivation"}
 
 
 def _curious_ask(cat, m, trg, cust):
     owner = _owner(m, cat)
     views = _views(m)
     questions = {
-        "dentists": "What procedure carries your highest margin this week?",
-        "salons": "Which premium service needs a booking injection right now?",
-        "restaurants": "Which high-margin dish should we push to local traffic today?",
-        "gyms": "How many trial conversions are pending this week?",
-        "pharmacies": "Which OTC category requires an immediate inventory push?",
+        "dentists": "Which treatment is your patients asking about most this week?",
+        "salons": "What's your most-booked service right now?",
+        "restaurants": "What's moving fastest on your menu today?",
+        "gyms": "How many trial enquiries came in this week?",
+        "pharmacies": "Which category is moving fastest off your shelves?",
     }
-    q = questions.get(_slug(cat), "Which operational metric needs an immediate push today?")
-    body = (f"{owner}, daily summary: {views:,} users scanned your profile this month. "
-            f"To maximize yield: {q}")
-    return {"body": body, "cta": "open_ended", "rationale": "Curious ask — operational targeting"}
+    q = questions.get(_slug(cat), "What's your highest-value service right now?")
+    body = (f"{owner}, quick check-in — {views:,} people found your profile this month. {q}")
+    return {"body": body, "cta": "open_ended", "rationale": "Curious ask — conversational signal collection"}
 
 
 def _appointment(cat, m, trg, cust):
@@ -300,16 +296,15 @@ def _appointment(cat, m, trg, cust):
 
 def _supply_alert(cat, m, trg, cust):
     p = trg.get("payload", {})
-    mol = p.get("molecule", p.get("item", "a key product"))
+    mol = p.get("molecule", p.get("item", "a product"))
     batches = p.get("affected_batches", [])
     mfr = p.get("manufacturer", "")
     owner = _owner(m, cat)
-    batch_str = f" Affected batches: {', '.join(batches[:2])}." if batches else ""
-    mfr_str = f" (Mfr: {mfr})" if mfr else ""
-    body = (f"{owner}, critical compliance alert — {mol}{mfr_str} has an active recall.{batch_str} "
-            f"Non-compliance carries severe regulatory risk. I have drafted the mandatory consumer notice. "
-            f"Authorize deployment to your profile?")
-    return {"body": body, "cta": "binary_yes_no", "rationale": "Supply alert — severe compliance risk"}
+    batch_str = f" Batches affected: {', '.join(batches[:2])}." if batches else ""
+    mfr_str = f" ({mfr})" if mfr else ""
+    body = (f"{owner}, heads up — {mol}{mfr_str} has a supply advisory this week.{batch_str} "
+            f"Worth pulling the affected stock and noting it on your profile. Want me to draft the notice?")
+    return {"body": body, "cta": "binary_yes_no", "rationale": "Supply alert — calm compliance framing"}
 
 
 def _regulation_change(cat, m, trg, cust):
@@ -321,12 +316,11 @@ def _regulation_change(cat, m, trg, cust):
     deadline = p.get("deadline_iso", item.get("deadline", ""))
     actionable = item.get("actionable", "")
     owner = _owner(m, cat)
-    deadline_str = f" Deadline: {deadline[:10]}." if deadline else ""
-    action_str = f" Action required: {actionable}." if actionable else ""
-    body = (f"{owner}, {source} mandated a new protocol: {topic}.{deadline_str}{action_str} "
-            f"Failure to implement risks penalties. I have compiled the SOP and compliance checklist. "
-            f"Review the documentation now?")
-    return {"body": body, "cta": "binary_yes_no", "rationale": "Regulation change — compliance enforcement"}
+    deadline_str = f" Deadline is {deadline[:10]}." if deadline else ""
+    action_str = f" Key step: {actionable}." if actionable else ""
+    body = (f"{owner}, {source} just updated the guidelines on {topic}.{deadline_str}{action_str} "
+            f"Happy to pull the checklist and draft a staff notice if that helps.")
+    return {"body": body, "cta": "binary_yes_no", "rationale": "Regulation — trusted advisory tone"}
 
 
 def _gbp_unverified(cat, m, trg, cust):
@@ -336,10 +330,10 @@ def _gbp_unverified(cat, m, trg, cust):
     owner = _owner(m, cat)
     views = _views(m)
     uplift_str = f"{int(uplift * 100)}%" if uplift else "30%"
-    body = (f"{owner}, operational block: your Google profile is unverified. Verified competitors are capturing {uplift_str} more query volume. "
-            f"We are bleeding traffic (currently at {views:,}/mo). "
-            f"I have initialized the {path.replace('_',' ')} verification protocol. Proceed?")
-    return {"body": body, "cta": "binary_yes_no", "rationale": "GBP verification — operational block + loss aversion"}
+    body = (f"{owner}, your Google profile isn't verified yet — verified listings typically get {uplift_str} more views. "
+            f"You're already getting {views:,}/month without it. "
+            f"The {path.replace('_',' ')} process takes about 5 minutes. Want to run through it now?")
+    return {"body": body, "cta": "binary_yes_no", "rationale": "GBP — trust-building, not alarm"}
 
 
 def _ipl_match(cat, m, trg, cust):

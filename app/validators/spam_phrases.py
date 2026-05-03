@@ -13,6 +13,12 @@ SPAM_PHRASES = [
     "guaranteed results", "proven strategy", "skyrocket",
     "viral offer", "crazy deal", "instant recovery", "miracle cure",
     "guaranteed transformation", "100% results",
+    # AI-operator / corporate bot language
+    "authorize deployment", "execute the protocol", "operational block",
+    "initiating verification sequence", "execute protocol",
+    "bleeding traffic", "impression share is slipping",
+    "deploy immediately", "compliance enforcement",
+    "i have compiled the sop", "operational alert",
 ]
 
 CATEGORY_TABOO = {
