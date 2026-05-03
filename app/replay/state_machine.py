@@ -44,12 +44,14 @@ COMMITMENT_PATTERNS = [
 ]
 
 HOSTILE_PATTERNS = [
-    r"stop (mess?aging|contact|spam)",
+    r"^\s*stop\s*$",              # bare word STOP
+    r"stop (mess?aging|contact|spam|send)",
     r"do not (contact|message|call|text)",
+    r"don'?t (message|text|contact|call|send)",
     r"\bspam\b", r"waste of time", r"not interested",
     r"remove (me|my number)", r"unsubscribe",
     r"band karo", r"mat karo", r"nahin chahiye",
-    r"leave me alone", r"\bblock\b", r"\breport\b", r"don'?t text", r"no thanks",
+    r"leave me alone", r"\bblock\b", r"\breport\b", r"no thanks",
 ]
 
 HESITATION_PATTERNS = [
@@ -57,6 +59,8 @@ HESITATION_PATTERNS = [
     r"thoda baad", r"abhi nahi", r"let me check",
     r"will think", r"sochna padega", r"maybe", r"not sure",
     r"let me talk", r"discuss with",
+    r"after diwali", r"after holi", r"after eid", r"after the weekend",
+    r"after the match", r"next month", r"give me (a|some) time",
 ]
 
 OFF_TOPIC_PATTERNS = [
@@ -462,6 +466,6 @@ class ReplayStateMachine:
 
         body = continuations.get(
             strategy,
-            f"{name_prefix}Happy to take the next step — what would be most useful right now?"
+            f"{name_prefix}Still on the same topic — what would be most useful to move first?"
         )
         return body

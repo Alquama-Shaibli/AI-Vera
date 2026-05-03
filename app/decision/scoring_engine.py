@@ -28,7 +28,8 @@ WEIGHTS = {
 }
 
 # Strategic silence threshold: skip triggers scoring below this
-CONFIDENCE_FLOOR = 4.5
+# Set at 3.8 — filters noise but allows all real operational triggers through
+CONFIDENCE_FLOOR = 3.8
 
 # trigger.kind → base relevance score (0-10)
 KIND_RELEVANCE = {
@@ -49,14 +50,14 @@ KIND_RELEVANCE = {
     "ipl_match_today": 6,
     "wedding_package_followup": 6,
     "trial_followup": 6,
-    "gbp_unverified": 5,
-    "research_digest": 5,
-    "cde_opportunity": 4,
-    "category_seasonal": 5,
-    "seasonal_perf_dip": 4,
-    "festival_upcoming": 4,
-    "curious_ask_due": 3,
-    "dormant_with_vera": 5,
+    "gbp_unverified": 7,
+    "research_digest": 6,
+    "cde_opportunity": 6,
+    "category_seasonal": 6,
+    "seasonal_perf_dip": 5,
+    "festival_upcoming": 6,
+    "curious_ask_due": 4,
+    "dormant_with_vera": 6,
     "appointment_tomorrow": 7,
 }
 
