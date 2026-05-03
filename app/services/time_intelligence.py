@@ -63,4 +63,5 @@ def get_tod_multiplier(category_slug: str, trigger_kind: str) -> float:
         if h_start <= hour < h_end:
             mult *= km
             break
-    return round(mult, 2)
+    # Floor: never suppress valid triggers below 92% — prevents over-silencing
+    return round(max(0.92, mult), 2)

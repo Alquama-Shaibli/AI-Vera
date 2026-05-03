@@ -76,7 +76,7 @@ def _score_trigger_relevance(body: str, trigger: dict) -> float:
         elif isinstance(v, int) and v > 0 and str(v) in body:
             score = min(10.0, score + 0.5)
     kind_keywords = {
-        "perf_dip":          ["dip", "down", "drop", "CTR", "listing", "fixes"],
+        "perf_dip":          ["dip", "down", "drop", "CTR", "listing", "fixes", "slowed"],
         "perf_spike":        ["up", "spike", "calls", "window", "traffic"],
         "recall_due":        ["recall", "due", "slot", "appointment"],
         "competitor_opened": ["listed", "google", "nearby", "refreshed"],
@@ -86,6 +86,12 @@ def _score_trigger_relevance(body: str, trigger: dict) -> float:
         "renewal_due":       ["renew", "plan", "days", "visibility"],
         "research_digest":   ["study", "research", "patients", "findings"],
         "milestone_reached": ["reviews", "milestone", "crossed", "peers"],
+        "winback_eligible":  ["lapsed", "bringing back", "drifted", "personalised"],
+        "gbp_unverified":   ["verified", "Google", "postcard", "verification"],
+        "ipl_match_today":  ["match", "IPL", "delivery", "night"],
+        "category_seasonal": ["seasonal", "demand", "shifting", "surge"],
+        "active_planning_intent": ["outline", "idea", "package", "look"],
+        "wedding_package_followup": ["wedding", "💐", "lock in", "schedule"],
     }
     for kw in kind_keywords.get(kind, []):
         if kw.lower() in body.lower():
@@ -102,12 +108,13 @@ def _score_engagement(body: str, cta: str) -> float:
     if q_count > 1:
         score -= 1.5
 
-    # Penalize AI-speak and bot energy
+    # Penalize AI-speak and bot energy (Phase 1)
     ai_phrases = [
         "operational alert", "authorize", "execute protocol", "initiating",
         "deploy immediately", "operational block", "impression share",
         "bleeding traffic", "execute the", "operational scope",
-        "queueing the update", "i have compiled",
+        "queueing the update", "i have compiled", "implementation sequence",
+        "workflow update", "strategic deployment", "algorithmic boost",
     ]
     for phrase in ai_phrases:
         if phrase in body_low:
@@ -117,7 +124,7 @@ def _score_engagement(body: str, cta: str) -> float:
     human_hooks = [
         "tonight", "this week", "this evening", "before the", "worth doing",
         "typically", "usually", "good window", "keeps you visible", "hold the momentum",
-        "worth a try", "2-3 days", "a few hours", "move on it",
+        "worth a try", "2-3 days", "a few hours", "move on it", "around",
     ]
     for h in human_hooks:
         if h in body_low:
@@ -141,21 +148,24 @@ def _score_human_realism(body: str, merchant: dict, category: dict) -> float:
     score = 5.0
     body_low = body.lower()
 
-    # Penalize robot / IT / corporate language
+    # Penalize robot / IT / corporate language (Search & Destroy List)
     robot_phrases = [
         "execute", "deploy", "authorize", "protocol", "operational",
         "implementation", "compliance checklist", "mandate", "procedure",
         "queueing", "flagging", "initiating", "activated", "sequence",
+        "workflow", "process flow", "action sequence", "deployment",
+        "anomaly", "momentum optimization", "campaign execution",
+        "automated", "system generated", "processing",
     ]
     for rp in robot_phrases:
         if rp in body_low:
-            score -= 0.8
+            score -= 1.0
 
     # Penalize AI-assistant energy
     ai_energy = [
         "happy to help", "let me know", "anything else", "feel free",
         "i can assist", "great choice", "sounds good", "glad to",
-        "absolutely", "no worries", "of course",
+        "absolutely", "no worries", "of course", "want me to",
     ]
     for ae in ai_energy:
         if ae in body_low:
@@ -166,6 +176,7 @@ def _score_human_realism(body: str, merchant: dict, category: dict) -> float:
         "heads up", "quick check", "worth", "typically", "usually",
         "good window", "move on it", "keep an eye", "a few", "this week",
         "should get you", "tracking well", "people are checking",
+        "shift", "around", "looks like", "worth doing",
     ]
     for hs in human_signals:
         if hs in body_low:
@@ -182,6 +193,58 @@ def _score_human_realism(body: str, merchant: dict, category: dict) -> float:
         score = min(10.0, score + 1.0)
 
     return max(0.0, min(10.0, score))
+
+
+# ── Public utility: human-realism gate ────────────────────────────────
+
+def sounds_like_real_whatsapp_manager(message: str) -> bool:
+    """
+    Binary gate: returns True if the message reads like it was sent by
+    a real WhatsApp-based merchant growth manager, not an AI or CRM tool.
+    """
+    body_low = message.lower()
+
+    # Hard fail: robot language present (Search & Destroy List)
+    robot_hard_fails = [
+        "operational alert", "execute the protocol", "authorize deployment",
+        "initiating verification", "bleeding traffic", "deployment sequence",
+        "compliance enforcement", "workflow execution", "action sequence",
+        "queueing the update", "i have compiled the sop", "automated message",
+        "system generated", "implement setup", "momentum optimization",
+        "campaign execution", "ready to proceed", "visibility decay",
+    ]
+    for rf in robot_hard_fails:
+        if rf in body_low:
+            return False
+
+    # Soft fail: too many questions (multi-CTA)
+    if body_low.count("?") > 1:
+        return False
+
+    # Soft fail: too long for WhatsApp
+    if len(message) > 350:
+        return False
+
+    # Soft fail: AI-assistant opener
+    ai_openers = [
+        "happy to help", "let me know", "feel free to", "i can assist",
+        "want me to", "would you like", "shall i",
+    ]
+    for ao in ai_openers:
+        if body_low.startswith(ao) or f". {ao}" in body_low:
+            return False
+
+    # Must have at least one human signal
+    human_signals = [
+        "usually", "typically", "tends to", "tends", "this week",
+        "tonight", "this evening", "before", "after", "a few days",
+        "people", "patients", "members", "clients", "customers",
+        "nearby", "local", "compare", "browse", "decide",
+        "heads up", "worth", "check back", "around",
+    ]
+    has_human_signal = any(hs in body_low for hs in human_signals)
+
+    return has_human_signal
 
 
 # ── Main critique function ─────────────────────────────────────────────
@@ -225,6 +288,7 @@ def critique(
         "engagement":       round(s5, 2),
         "human_realism":    round(s6, 2),
         "predicted_total":  round(total, 2),
+        "sounds_human":     sounds_like_real_whatsapp_manager(body),
     }
     composed["rejected"] = total < THRESHOLD
     return composed

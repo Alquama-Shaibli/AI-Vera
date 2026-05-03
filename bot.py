@@ -16,7 +16,7 @@ def compose(category: dict, merchant: dict, trigger: dict, customer: Optional[di
     # Step 1: Deterministic template build
     result = build_template_message(category, merchant, trigger, customer)
     
-    # Step 2: Try LLM enhancement if score is high enough or if template is weak
+    # Step 2: Try LLM enhancement
     try:
         from app.generation.llm_client import LLMClient
         from app.generation.composer import MessageComposer
@@ -56,67 +56,40 @@ _OFF = [r"\bweather\b", r"\bcricket score\b", r"\bjob\b", r"\bloan\b",
 
 
 def respond(state: dict, merchant_message: str) -> dict:
-    """Multi-turn reply handler with momentum and memory."""
-    msg = merchant_message.lower()
-    mid = state.get("merchant_id", "unknown")
-    auto_cnt = state.get("auto_reply_count", 0)
+    """Multi-turn reply handler — now uses ReplayStateMachine for elite realism."""
+    from app.replay.state_machine import ReplayStateMachine
+    from app.storage.context_store import ContextStore, ConversationStore, SuppressionStore
+    
+    # Initialize components
+    context_store = ContextStore()
+    conversation_store = ConversationStore()
+    suppression_store = SuppressionStore()
+    rsm = ReplayStateMachine(context_store, conversation_store, suppression_store)
+    
+    conversation_id = state.get("conversation_id", "default")
+    merchant_id = state.get("merchant_id", "unknown")
+    customer_id = state.get("customer_id")
     turn = state.get("turn", 2)
     
-    from app.services.merchant_memory import get_memory
-    from app.generation.compression import compress
-    memory = get_memory()
-
-    # Helper to return compressed response
-    def _resp(action, body=None, cta="none", rationale=""):
-        res = {"action": action, "rationale": rationale}
-        if body:
-            res["body"] = compress(body)
-        if cta != "none":
-            res["cta"] = cta
-        return res
-
-    # Detect intent and update summary
-    for p in _HOSTILE:
-        if re.search(p, msg, re.I):
-            memory.update_summary(mid, "merchant_interested", False)
-            return _resp("end", "Understood — I'll stop reaching out. Here if you need help anytime 🙏",
-                         rationale="Hostile — graceful exit")
-
-    for p in _AUTO:
-        if re.search(p, msg, re.I):
-            if auto_cnt >= 2:
-                return _resp("end", rationale="Auto-reply limit")
-            if auto_cnt == 1:
-                return {"action": "wait", "wait_seconds": 3600, "rationale": "Second auto-reply"}
-            return _resp("send", "Looks like an auto-reply! If you're the owner, happy to chat later. Still interested?",
-                         cta="binary_yes_no", rationale="Auto-reply probe")
-
-    for p in _COMMIT:
-        if re.search(p, msg, re.I):
-            memory.update_summary(mid, "merchant_interested", True)
-            return _resp("send", "Perfect! I'm on it. Will confirm once done. Anything else?",
-                         cta="open_ended", rationale="Commitment — action mode")
-
-    # Soft decline / Objections
-    if any(x in msg for x in ["next week", "later", "not now", "busy"]):
-        memory.update_summary(mid, "merchant_interested", "maybe_later")
-        return {"action": "wait", "wait_seconds": 86400 * 7,
-                "body": compress("No problem! I'll check back next week. Focus on your rush for now 🙏"),
-                "rationale": "Soft decline — momentum reduction"}
-
-    for p in _OFF:
-        if re.search(p, msg, re.I):
-            return _resp("send", "That's outside what I can help with, but I'm here for your growth. Pick up where we left off?",
-                         cta="open_ended", rationale="Off-topic redirect")
-
-    if turn >= 6:
-        return _resp("end", "Koi baat nahi — jab zaroorat ho main yahan hoon 🙏",
-                     rationale="Max turns")
-
-    # Adaptive momentum based on summary
-    summary = memory.get_summary(mid)
-    if summary.get("merchant_interested") == "maybe_later":
-         return {"action": "wait", "wait_seconds": 86400, "rationale": "Respecting delay"}
-
-    return _resp("send", "Got it! Happy to handle this whenever you're ready. Just say the word.",
-                 cta="open_ended", rationale="Engaged — continuing")
+    # Process through state machine
+    res = rsm.handle_reply(
+        conversation_id=conversation_id,
+        merchant_id=merchant_id,
+        customer_id=customer_id,
+        message=merchant_message,
+        turn_number=turn
+    )
+    
+    # Convert ReplyResponse schema to judge-compatible dict
+    out = {
+        "action": res.action,
+        "rationale": res.rationale
+    }
+    if res.body:
+        out["body"] = res.body
+    if res.cta and res.cta != "none":
+        out["cta"] = res.cta
+    if res.wait_seconds:
+        out["wait_seconds"] = res.wait_seconds
+        
+    return out

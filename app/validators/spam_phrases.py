@@ -13,12 +13,20 @@ SPAM_PHRASES = [
     "guaranteed results", "proven strategy", "skyrocket",
     "viral offer", "crazy deal", "instant recovery", "miracle cure",
     "guaranteed transformation", "100% results",
-    # AI-operator / corporate bot language
+    # AI-operator / corporate bot language / Jargon (Phase 1 Final Audit)
     "authorize deployment", "execute the protocol", "operational block",
     "initiating verification sequence", "execute protocol",
     "bleeding traffic", "impression share is slipping",
     "deploy immediately", "compliance enforcement",
     "i have compiled the sop", "operational alert",
+    "visibility decay", "traffic anomaly", "anomaly", "engagement momentum",
+    "momentum optimization", "conversion optimization", "strategic deployment",
+    "campaign execution", "ready to proceed", "implementation ready",
+    "happy to help", "shall i", "want me to", "would you like",
+    "i will prepare", "i can execute", "i can assist", "operational update",
+    "workflow update", "implementation sequence", "workflow", "initiating",
+    "queueing", "authorization", "protocol", "execute", "deploy",
+    "implementation", "automated", "system generated", "processing",
 ]
 
 CATEGORY_TABOO = {

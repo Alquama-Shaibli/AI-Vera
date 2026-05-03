@@ -20,11 +20,11 @@ from loguru import logger
 # ── Weight configuration ───────────────────────────────────────────────
 
 WEIGHTS = {
-    "merchant_need": 0.35,       # 1. Merchant pain
+    "merchant_need": 0.38,       # 1. Merchant pain — highest weight
     "trigger_relevance": 0.25,   # 2. Immediate opportunity
-    "urgency": 0.20,             # 3. Timing
-    "customer_match": 0.10,      # 4. Actionability 
-    "category_alignment": 0.10,  # 5. Conversion probability
+    "urgency": 0.17,             # 3. Timing
+    "customer_match": 0.15,      # 4. Actionability — raised for specificity
+    "category_alignment": 0.05,  # 5. Reduced — category is context not primary signal
 }
 
 # Strategic silence threshold: skip triggers scoring below this

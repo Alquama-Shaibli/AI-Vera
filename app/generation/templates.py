@@ -60,10 +60,13 @@ def _research_digest(cat, m, trg, cust):
     segment = item.get("patient_segment", "patients").replace("_", " ")
     owner = _owner(m, cat)
     n_str = f"{n:,}-patient " if isinstance(n, int) and n else ""
-    body = (f"{owner}, {source} just dropped a {n_str}study on {title}. "
-            f"Local {segment} are highly sensitive to this. I've prepared a clinical summary and patient notice to maintain your authority. "
-            f"Review the draft?")
-    return {"body": body, "cta": "binary_yes_no", "rationale": "Research digest — authority + operational execution"}
+    actionable = item.get("actionable", "")
+    action_str = f" Key step: {actionable}." if actionable else ""
+    body = (f"{owner}, {source} published a {n_str}study on {title}. "
+            f"{segment.capitalize()} in {_loc(m)} tend to ask about this once they see it online.{action_str} "
+            f"I'll have the key points ready to share with patients who bring it up.")
+    return {"body": body, "cta": "binary_yes_no", "rationale": "Research digest — builds clinical authority, not alarm"}
+
 
 
 def _perf_dip(cat, m, trg, cust):
@@ -79,9 +82,10 @@ def _perf_dip(cat, m, trg, cust):
     metric = p.get("metric", "calls")
     baseline = p.get("vs_baseline", _calls(m))
     gap_str = f" — {gap}pp behind the local average" if gap > 0 else ""
-    body = (f"{owner}, your {metric} dipped {_pct(abs(dv))} this week (from {baseline}). "
+    body = (f"{owner}, your {metric} slowed down {_pct(abs(dv))} this week (from {baseline}). "
             f"CTR sitting at {my:.1%} vs {peer:.1%} for {_loc(m)} peers{gap_str}. "
-            f"Two quick listing fixes should recover most of it — worth doing tonight?")
+            f"Better to fix this before the weekend traffic picks up.")
+
     return {"body": body, "cta": "binary_yes_no", "rationale": "Perf dip — grounded loss aversion"}
 
 
@@ -93,9 +97,10 @@ def _perf_spike(cat, m, trg, cust):
     owner = _owner(m, cat)
     offs = _offers(m)
     driver_str = f" Looks like the {driver.replace('_',' ')} change drove it." if driver else ""
-    offer_str = f" Attaching '{offs[0]}' to catch the traffic." if offs else " Worth activating an offer while it lasts."
+    offer_str = f" I'll attach '{offs[0]}' to catch the traffic." if offs else " Worth activating an offer while it lasts."
     body = (f"{owner}, calls are up {_pct(abs(dv))} this week — from {baseline} baseline.{driver_str}"
-            f" Good window to lock in a few conversions.{offer_str} Move on it?")
+            f" Good window to lock in a few conversions.{offer_str} Move on it while the search traffic is high?")
+
     return {"body": body, "cta": "binary_yes_no", "rationale": "Perf spike — momentum + timing"}
 
 
@@ -132,11 +137,12 @@ def _milestone_reached(cat, m, trg, cust):
     loc = _loc(m)
     if is_imminent and val_now and milestone:
         body = (f"{owner}, you're at {val_now} {metric} — {milestone - val_now} away from {milestone}. "
-                f"Peers in {loc} average {peer}. A post this week should get you there. Want me to draft one?")
+                f"Peers in {loc} average {peer}. I'll have the post ready shortly to get you there before the weekend.")
     else:
         body = (f"{owner}, you crossed {milestone} {metric}. "
                 f"Peers in {loc} average {peer} — you're tracking well. "
-                f"Good time for a post to hold the momentum. Want me to draft one?")
+                f"Good time for a post to hold the momentum. I'll have it ready for you shortly.")
+
     return {"body": body, "cta": "binary_yes_no", "rationale": "Milestone — measured momentum"}
 
 
@@ -146,11 +152,21 @@ def _dormant(cat, m, trg, cust):
     last = p.get("last_topic", "")
     owner = _owner(m, cat)
     views = _views(m)
+    slug = _slug(cat)
     last_str = f" Last time we were looking at {last.replace('_',' ')}." if last else ""
+    # Category-specific re-engagement question
+    reopen = {
+        "dentists": "Which treatment is getting the most enquiries right now?",
+        "salons": "What's your most-booked service right now?",
+        "restaurants": "What's moving fastest on your menu this week?",
+        "gyms": "How many trial enquiries have come in this week?",
+        "pharmacies": "Which category is moving fastest off the shelves?",
+    }.get(slug, "What's your highest-value service right now?")
     body = (f"{owner}, it's been {days} days.{last_str} "
-            f"Your profile is still pulling {views:,} views this month — people are checking. "
-            f"What's your highest-value service right now?")
-    return {"body": body, "cta": "open_ended", "rationale": "Dormant — natural re-engagement"}
+            f"Your profile pulled {views:,} views recently — people are still checking. "
+            f"{reopen}")
+    return {"body": body, "cta": "open_ended", "rationale": "Dormant — category-specific natural re-engagement"}
+
 
 
 def _competitor(cat, m, trg, cust):
@@ -169,7 +185,8 @@ def _competitor(cat, m, trg, cust):
         offer_str = f" They're leading with {their_offer}."
     body = (f"{owner}, heads up — {comp} just listed {dist_str} on Google.{offer_str} "
             f"{_loc(m)} peers average {peer} reviews. "
-            f"A refreshed post this week keeps you visible to anyone comparing nearby. Want to move on it?")
+            f"Good time to refresh the listing before evening searches rise.")
+
     return {"body": body, "cta": "binary_yes_no", "rationale": "Competitor — grounded competitive awareness"}
 
 
@@ -195,8 +212,9 @@ def _review_theme(cat, m, trg, cust):
     trend_str = f" — {trend}" if trend else ""
     quote_str = f' (like: "{quote[:50]}")' if quote else ""
     body = (f"{owner}, {count} reviews this month mention '{theme}'{trend_str}{quote_str}. "
-            f"A well-placed public reply to those usually shifts the perception over the next few weeks. "
-            f"Want me to draft one for you to review?")
+            f"A direct public response to those usually shifts the perception quickly. "
+            f"I'll have a draft ready shortly for you to look over.")
+
     return {"body": body, "cta": "binary_yes_no", "rationale": "Review theme — trust + reputation"}
 
 
@@ -209,8 +227,9 @@ def _renewal(cat, m, trg, cust):
     views = _views(m)
     amt_str = f" (₹{amount:,})" if isinstance(amount, int) and amount else ""
     body = (f"{owner}, your {plan} plan renews in {days} days{amt_str}. "
-            f"You're at {views:,} profile views this month — that visibility is tied to the active plan. "
-            f"Want me to send the renewal link?")
+            f"You're at {views:,} profile views recently — that visibility is tied to the active plan. "
+            f"I'll send the link over to keep the momentum uninterrupted.")
+
     return {"body": body, "cta": "binary_yes_no", "rationale": "Renewal — calm retention"}
 
 
@@ -263,9 +282,9 @@ def _winback(cat, m, trg, cust):
                    m.get("customer_aggregate", {}).get("lapsed_count", 0))
     dip = p.get("perf_dip_pct", 0)
     owner = _owner(m, cat)
-    dip_str = f" Profile views also slipped {_pct(abs(dip))} over the same period." if dip else ""
+    dip_str = f" Profile views also slowed down {_pct(abs(dip))} recently." if dip else ""
     body = (f"{owner}, {lapsed} customers drifted out over the last 30 days.{dip_str} "
-            f"A short personalised message to that group typically brings back 15-20%. "
+            f"A short personalised message to that group usually brings back 15-20%. "
             f"Worth a try this week?")
     return {"body": body, "cta": "binary_yes_no", "rationale": "Winback — calm reactivation"}
 
@@ -273,16 +292,43 @@ def _winback(cat, m, trg, cust):
 def _curious_ask(cat, m, trg, cust):
     owner = _owner(m, cat)
     views = _views(m)
+    slug = _slug(cat)
+    calls = _calls(m)
+    # Category-specific practical question with data context
     questions = {
-        "dentists": "Which treatment is your patients asking about most this week?",
-        "salons": "What's your most-booked service right now?",
-        "restaurants": "What's moving fastest on your menu today?",
-        "gyms": "How many trial enquiries came in this week?",
-        "pharmacies": "Which category is moving fastest off your shelves?",
+        "dentists": (
+            f"{owner}, your profile had {views:,} views recently. "
+            f"Which treatment is your patients asking about most right now? "
+            f"Helps make sure the listing is front-loading the right services."
+        ),
+        "salons": (
+            f"{owner}, {views:,} views recently and {calls} calls. "
+            f"What's your most-booked service right now? "
+            f"Worth making sure it's the first thing people see on the profile."
+        ),
+        "restaurants": (
+            f"{owner}, {views:,} people checked your profile recently. "
+            f"What's moving fastest on the menu right now? "
+            f"Evening diners tend to decide based on what's featured first."
+        ),
+        "gyms": (
+            f"{owner}, {views:,} profile views recently. "
+            f"How many trial enquiries came in this week? "
+            f"That's usually the clearest signal of what's working in local search."
+        ),
+        "pharmacies": (
+            f"{owner}, {views:,} views recently. "
+            f"Which category is moving fastest off the shelves right now? "
+            f"Good to make sure fast-movers are highlighted on the listing."
+        ),
     }
-    q = questions.get(_slug(cat), "What's your highest-value service right now?")
-    body = (f"{owner}, quick check-in — {views:,} people found your profile this month. {q}")
-    return {"body": body, "cta": "open_ended", "rationale": "Curious ask — conversational signal collection"}
+    body = questions.get(
+        slug,
+        f"{owner}, {views:,} people found your profile recently. "
+        f"What's your highest-value service right now? Worth making sure it's clearly visible."
+    )
+    return {"body": body, "cta": "open_ended", "rationale": "Curious ask — data-grounded signal collection"}
+
 
 
 def _appointment(cat, m, trg, cust):
@@ -303,7 +349,8 @@ def _supply_alert(cat, m, trg, cust):
     batch_str = f" Batches affected: {', '.join(batches[:2])}." if batches else ""
     mfr_str = f" ({mfr})" if mfr else ""
     body = (f"{owner}, heads up — {mol}{mfr_str} has a supply advisory this week.{batch_str} "
-            f"Worth pulling the affected stock and noting it on your profile. Want me to draft the notice?")
+            f"I'll have a short notice for your profile ready shortly to keep you covered.")
+
     return {"body": body, "cta": "binary_yes_no", "rationale": "Supply alert — calm compliance framing"}
 
 
@@ -319,7 +366,8 @@ def _regulation_change(cat, m, trg, cust):
     deadline_str = f" Deadline is {deadline[:10]}." if deadline else ""
     action_str = f" Key step: {actionable}." if actionable else ""
     body = (f"{owner}, {source} just updated the guidelines on {topic}.{deadline_str}{action_str} "
-            f"Happy to pull the checklist and draft a staff notice if that helps.")
+            f"I'll have the checklist and a staff notice ready shortly so your team can get started.")
+
     return {"body": body, "cta": "binary_yes_no", "rationale": "Regulation — trusted advisory tone"}
 
 
@@ -331,8 +379,9 @@ def _gbp_unverified(cat, m, trg, cust):
     views = _views(m)
     uplift_str = f"{int(uplift * 100)}%" if uplift else "30%"
     body = (f"{owner}, your Google profile isn't verified yet — verified listings typically get {uplift_str} more views. "
-            f"You're already getting {views:,}/month without it. "
-            f"The {path.replace('_',' ')} process takes about 5 minutes. Want to run through it now?")
+            f"You're already getting {views:,} views recently without it. "
+            f"Better to get this done now before the evening traffic picks up.")
+
     return {"body": body, "cta": "binary_yes_no", "rationale": "GBP — trust-building, not alarm"}
 
 
@@ -352,9 +401,10 @@ def _ipl_match(cat, m, trg, cust):
             time_str = f" ({h12}:{t[14:16]}{ampm} today)"
         except Exception:
             pass
-    offer_str = f" Push '{offs[0]}' as a match-day special?" if offs else " Want me to set up a match-day offer?"
+    offer_str = f" I'll push '{offs[0]}' as a match-day special to catch the rush." if offs else " I'll set up a match-day offer to catch the delivery orders."
     body = (f"{owner}, {match}{time_str} — foot traffic and delivery orders spike 40-60% on match nights. "
             f"{venue and f'Venue: {venue}. ' or ''}{offer_str}")
+
     return {"body": body, "cta": "binary_yes_no", "rationale": "IPL match day — timing + urgency"}
 
 
@@ -367,9 +417,10 @@ def _category_seasonal(cat, m, trg, cust):
     if trends:
         top = trends[:3]
         trend_str = ", ".join(t.replace("_demand_", " demand ").replace("+", "+") for t in top)
-        body = (f"{owner}, seasonal demand anomaly detected: {trend_str}. "
-                f"We had {views:,} views recently, but inventory is misaligned with the surge. "
-                f"I've mapped the required GBP updates to intercept this traffic. Deploy now?")
+        body = (f"{owner}, looks like demand is shifting a bit: {trend_str}. "
+                f"We had {views:,} views recently, but inventory isn't quite aligned with the surge. "
+                f"Better to update the listing now while traffic is rising.")
+
     else:
         return _curious_ask(cat, m, trg, cust)
     return {"body": body, "cta": "binary_yes_no", "rationale": "Seasonal demand — intercept traffic"}
@@ -389,7 +440,8 @@ def _cde_opportunity(cat, m, trg, cust):
     fee_str = f" {fee.replace('_',' ')}" if fee else ""
     if title:
         body = (f"{owner}, IDA is running: '{title}'{date_str}.{cred_str}{fee_str}. "
-                f"Worth attending for your practice. Want me to add it to your calendar?")
+                f"I'll have the registration details and a note ready shortly.")
+
     else:
         return _curious_ask(cat, m, trg, cust)
     return {"body": body, "cta": "open_ended", "rationale": "CDE opportunity — professional development"}
@@ -403,11 +455,11 @@ def _active_planning(cat, m, trg, cust):
     slug = _slug(cat)
     if topic and last_msg:
         body = (f"{owner}, continuing from your message — you mentioned: \"{last_msg[:80]}\". "
-                f"Here's what a {topic} package could look like: I've drafted the outline. "
-                f"Want me to share it?")
+                f"I've have the outline for the {topic} package ready — worth a quick look.")
     elif topic:
         body = (f"{owner}, I've put together an outline for your {topic} idea. "
-                f"Want me to share the draft?")
+                f"I'll have the draft ready for you shortly.")
+
     else:
         return _curious_ask(cat, m, trg, cust)
     return {"body": body, "cta": "binary_yes_no", "rationale": "Active planning intent — continue thread"}
@@ -425,7 +477,8 @@ def _wedding_followup(cat, m, trg, cust):
     days_str = f" {days_to} days to go." if days_to else ""
     step_str = f" It's the right time to start your {next_step}." if next_step else ""
     body = (f"Hi {cname}, {_biz(m)} here 💐 {date_str}{days_str}{step_str} "
-            f"Want to lock in your bridal prep schedule?")
+            f"Better to lock in the schedule now before the other bookings fill up.")
+
     return {"body": body, "cta": "binary_yes_no", "rationale": "Wedding followup — occasion urgency"}
 
 
@@ -436,9 +489,10 @@ def _seasonal_perf_dip(cat, m, trg, cust):
     owner = _owner(m, cat)
     views = _views(m)
     note_str = f" This is expected during {note}." if note else ""
-    body = (f"{owner}, profile views dipped {_pct(abs(dip))} this week.{note_str} "
-            f"Still {views:,} views this month — good base. "
-            f"Want me to run a targeted re-engagement campaign to counter the seasonal dip?")
+    body = (f"{owner}, profile views slowed down {_pct(abs(dip))} this week.{note_str} "
+            f"Still {views:,} views recently — good base. "
+            f"I'll refresh the profile to get that visibility back.")
+
     return {"body": body, "cta": "binary_yes_no", "rationale": "Seasonal dip — proactive counter"}
 
 
