@@ -21,14 +21,15 @@ BOT_HOST: str = os.getenv("BOT_HOST", "0.0.0.0")
 BOT_PORT: int = int(os.getenv("PORT", "8080"))
 
 # ── LLM ────────────────────────────────────────────────────────────────
-LLM_PROVIDER: str = os.getenv("LLM_PROVIDER", "openai")
-LLM_MODEL: str = os.getenv("LLM_MODEL", "gpt-4.1-mini")
+LLM_PROVIDER: str = os.getenv("LLM_PROVIDER", "gemini")
+LLM_MODEL: str = os.getenv("LLM_MODEL", "gemini-2.5-flash")
 OPENAI_API_KEY: str = os.getenv("OPENAI_API_KEY", "")
 ANTHROPIC_API_KEY: str = os.getenv("ANTHROPIC_API_KEY", "")
 GEMINI_API_KEY: str = os.getenv("GEMINI_API_KEY", "")
 
 # ── Redis ──────────────────────────────────────────────────────────────
 REDIS_URL: Optional[str] = os.getenv("REDIS_URL", None)
+USE_REDIS: bool = os.getenv("USE_REDIS", "false").lower() == "true"
 
 # ── Team metadata ──────────────────────────────────────────────────────
 TEAM_NAME: str = os.getenv("TEAM_NAME", "Vera-AI")
