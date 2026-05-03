@@ -32,7 +32,7 @@ REDIS_URL: Optional[str] = os.getenv("REDIS_URL", None)
 USE_REDIS: bool = os.getenv("USE_REDIS", "false").lower() == "true"
 
 # ── Team metadata ──────────────────────────────────────────────────────
-TEAM_NAME: str = os.getenv("TEAM_NAME", "Vera-AI")
+TEAM_NAME: str = os.getenv("TEAM_NAME", "Vera-Elite")
 _raw_members = os.getenv("TEAM_MEMBERS", '["Builder"]')
 try:
     TEAM_MEMBERS: list[str] = json.loads(_raw_members)
