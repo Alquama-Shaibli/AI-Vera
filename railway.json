@@ -10,6 +10,6 @@
     "restartPolicyType": "ON_FAILURE",
     "healthcheckPath": "/v1/healthz",
     "healthcheckTimeout": 5,
-    "serviceName": "vera-ai-hardened"
+    "serviceName": "vera-ai-engine-v3"
   }
 }
