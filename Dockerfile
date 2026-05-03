@@ -9,11 +9,9 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 COPY . .
 
-# Railway automatically detects PORT, but we default to 8080
+# Explicitly default to 8080 if PORT is missing
 ENV PORT=8080
 EXPOSE 8080
 
-HEALTHCHECK --interval=30s --timeout=5s --retries=3 \
-  CMD curl -f http://localhost:${PORT}/v1/healthz || exit 1
-
-CMD ["sh", "-c", "uvicorn app.main:app --host 0.0.0.0 --port ${PORT}"]
+# Use shell form to allow environment variable expansion
+CMD uvicorn app.main:app --host 0.0.0.0 --port $PORT

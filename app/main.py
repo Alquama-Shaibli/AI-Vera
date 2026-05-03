@@ -84,17 +84,10 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-@app.middleware("http")
-async def log_requests(request: Request, call_next):
-    logger.info(f"Incoming request: {request.method} {request.url}")
-    response = await call_next(request)
-    return response
-
-
 # ── Root ───────────────────────────────────────────────────────────────
 @app.get("/")
 def root():
-    return {"message": "Vera AI is online"}
+    return {"status": "online", "team": "Vera-Elite"}
 
 
 # ── /v1/healthz ────────────────────────────────────────────────────────
