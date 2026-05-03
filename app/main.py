@@ -242,4 +242,6 @@ async def reply(req: ReplyRequest):
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run("app.main:app", host=BOT_HOST, port=BOT_PORT, reload=False)
+    import os
+    port = int(os.getenv("PORT", BOT_PORT))
+    uvicorn.run("app.main:app", host=BOT_HOST, port=port, reload=False)

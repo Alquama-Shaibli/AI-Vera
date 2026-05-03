@@ -18,7 +18,7 @@ EXPANDED_DIR = DATASET_DIR / "expanded"
 
 # ── Server ─────────────────────────────────────────────────────────────
 BOT_HOST: str = os.getenv("BOT_HOST", "0.0.0.0")
-BOT_PORT: int = int(os.getenv("BOT_PORT", "8080"))
+BOT_PORT: int = int(os.getenv("PORT", "8080"))
 
 # ── LLM ────────────────────────────────────────────────────────────────
 LLM_PROVIDER: str = os.getenv("LLM_PROVIDER", "openai")
