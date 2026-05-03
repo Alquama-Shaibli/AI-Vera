@@ -7,6 +7,9 @@
   "deploy": {
     "numReplicas": 1,
     "sleepApplication": false,
-    "restartPolicyType": "ON_FAILURE"
+    "restartPolicyType": "ON_FAILURE",
+    "healthcheckPath": "/v1/healthz",
+    "healthcheckTimeout": 5,
+    "serviceName": "vera-ai-production-final"
   }
 }
