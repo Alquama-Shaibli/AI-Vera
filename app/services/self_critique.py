@@ -99,20 +99,29 @@ def _score_trigger_relevance(body: str, trigger: dict) -> float:
 def _score_engagement(body: str, cta: str) -> float:
     score = 5.0
     body_low = body.lower()
+    
+    # Penalize generic weak language
+    weak_phrases = ["want me to", "shall i", "should i", "happy to help", "quick one", "just crossed"]
+    for w in weak_phrases:
+        if w in body_low:
+            score -= 1.5
+
     # Single CTA check
-    cta_count = sum(1 for q in ["?", "want me", "shall i", "should i"] if q in body_low)
+    cta_count = sum(1 for q in ["?", "deploy", "execute", "authorize", "proceed"] if q in body_low)
     if cta_count > 2:
         score -= 1.0
-    # Engagement hooks
-    hooks = ["heads up", "just crossed", "spotted", "urgent", "missed you",
-             "just {", "spike", "dropped", "only", "today", "this week", "before the rush",
-             "best moment", "right now", "just say yes"]
+
+    # High-tension engagement hooks
+    hooks = ["critical update", "operational alert", "urgent", "anomaly detected",
+             "competitors are", "impression share", "bleeding traffic", "before competitors do",
+             "operational block", "severe regulatory risk"]
     for h in hooks:
-        if h.lower() in body_low:
-            score = min(10.0, score + 0.5)
+        if h in body_low:
+            score = min(10.0, score + 1.0)
+            
     # Length check — WhatsApp sweet spot 50-200 chars
     n = len(body)
-    if 50 <= n <= 200:
+    if 50 <= n <= 250:
         score = min(10.0, score + 1.0)
     elif n > 350:
         score -= 1.0

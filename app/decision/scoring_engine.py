@@ -20,15 +20,15 @@ from loguru import logger
 # ── Weight configuration ───────────────────────────────────────────────
 
 WEIGHTS = {
-    "trigger_relevance": 0.30,
-    "merchant_need": 0.25,
-    "urgency": 0.20,
-    "category_alignment": 0.15,
-    "customer_match": 0.10,
+    "merchant_need": 0.35,       # 1. Merchant pain
+    "trigger_relevance": 0.25,   # 2. Immediate opportunity
+    "urgency": 0.20,             # 3. Timing
+    "customer_match": 0.10,      # 4. Actionability 
+    "category_alignment": 0.10,  # 5. Conversion probability
 }
 
 # Strategic silence threshold: skip triggers scoring below this
-CONFIDENCE_FLOOR = 3.5
+CONFIDENCE_FLOOR = 4.5
 
 # trigger.kind → base relevance score (0-10)
 KIND_RELEVANCE = {

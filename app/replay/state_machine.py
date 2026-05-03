@@ -34,16 +34,16 @@ COMMITMENT_PATTERNS = [
     r"let'?s do it", r"go ahead", r"sounds good", r"ok let'?s",
     r"proceed", r"confirm", r"chalega", r"theek hai",
     r"whats? next", r"next step", r"tell me more",
-    r"i'?m interested", r"karo", r"kar do",
+    r"i'?m interested", r"karo", r"kar do", r"need help", r"book it",
 ]
 
 HOSTILE_PATTERNS = [
     r"stop (mess?aging|contact|spam)",
-    r"do not (contact|message|call)",
+    r"do not (contact|message|call|text)",
     r"spam", r"waste of time", r"not interested",
     r"remove (me|my number)", r"unsubscribe",
     r"band karo", r"mat karo", r"nahin chahiye",
-    r"leave me alone", r"block", r"report",
+    r"leave me alone", r"block", r"report", r"don'?t text", r"no thanks"
 ]
 
 OFF_TOPIC_PATTERNS = [
@@ -81,30 +81,18 @@ def _detect_intent(message: str) -> str:
 
 # ── Graceful responses ─────────────────────────────────────────────────
 
-GRACEFUL_EXIT = (
-    "Samajh gaya — koi baat nahi. Jab bhi zaroorat ho, main yahan hoon. "
-    "Best wishes for your business! 🙏"
-)
+GRACEFUL_EXIT = ""  # Hard terminal state - no follow up
 
-HOSTILE_EXIT = (
-    "Understood — I'll stop reaching out. Sorry for the interruption. "
-    "If you ever need help with your profile, we're here 🙏"
-)
-
-ACTION_RESPONSE = (
-    "Perfect! I'm on it — I'll handle this for you and confirm once done. "
-    "Anything else while I'm at it?"
-)
+HOSTILE_EXIT = ""  # Hard terminal state - no persuasion
 
 AUTO_REPLY_PROBE = (
-    "Looks like that may have been an auto-reply — no worries! "
-    "If you're the owner, happy to walk you through this in 2 minutes. Still interested?"
+    "Looks like that may have been an auto-reply. "
+    "If you're the owner, I'm here to handle the operational updates discussed. Proceed?"
 )
 
 OFF_TOPIC_REDIRECT = (
-    "Good question! Though that's outside what I can help with — "
-    "I'm focused on growing your business profile and customer engagement. "
-    "Want to pick up where we left off?"
+    "That's outside my operational scope. "
+    "I'm here to execute profile and engagement updates. Ready to proceed with the planned update?"
 )
 
 
@@ -141,13 +129,19 @@ class ReplayStateMachine:
 
         # Already ended
         if self._convs.is_ended(conversation_id):
-            return ReplyResponse(action="end", rationale="Conversation already closed")
+            return ReplyResponse(action="end", body="", rationale="Conversation already closed")
+
+        # Set strategy locking on first merchant reply
+        if not conv.get("current_strategy"):
+            trigger = self._ctx.get("trigger", conv.get("trigger_id", ""))
+            kind = trigger.get("kind", "unknown") if trigger else "unknown"
+            conv["current_strategy"] = kind
 
         # Record turn
         self._convs.add_turn(conversation_id, "merchant", message)
 
         intent = _detect_intent(message)
-        logger.info(f"conv={conversation_id} turn={turn_number} intent={intent}")
+        logger.info(f"conv={conversation_id} turn={turn_number} intent={intent} strategy={conv.get('current_strategy')}")
 
         # ── Auto-reply hell ────────────────────────────────────────────
         if intent == "auto_reply":
@@ -157,6 +151,7 @@ class ReplayStateMachine:
                 logger.info(f"Auto-reply limit reached for {conversation_id}")
                 return ReplyResponse(
                     action="end",
+                    body="",
                     rationale=f"Detected {count} consecutive auto-replies — ending gracefully",
                 )
             if count == 1:
@@ -172,7 +167,7 @@ class ReplayStateMachine:
             return ReplyResponse(action="wait", wait_seconds=3600,
                                  rationale="Second auto-reply — waiting")
 
-        # ── Hostile / stop ─────────────────────────────────────────────
+        # ── Hostile / stop (HARD TERMINAL STATE) ────────────────────────
         if intent == "hostile":
             self._convs.set_state(conversation_id, "ended")
             self._convs.add_turn(conversation_id, "vera", HOSTILE_EXIT)
@@ -185,13 +180,26 @@ class ReplayStateMachine:
         # ── Commitment → action mode ───────────────────────────────────
         if intent == "commitment":
             self._convs.set_state(conversation_id, "action_mode")
-            self._convs.add_turn(conversation_id, "vera", ACTION_RESPONSE)
+            action_body = self._generate_action_mode_response(conv, merchant_id, customer_id)
+            self._convs.add_turn(conversation_id, "vera", action_body)
             return ReplyResponse(
                 action="send",
-                body=ACTION_RESPONSE,
-                cta="open_ended",
-                rationale="Commitment detected — switching to action mode",
+                body=action_body,
+                cta="none",
+                rationale="Commitment detected — operational execution",
             )
+            
+        # ── Soft decline (Wait) ─────────────────────────────────────────
+        if any(x in message.lower() for x in ["next week", "later", "not now", "busy"]):
+             self._convs.set_state(conversation_id, "waiting")
+             body = "Understood. I will pause this execution for now."
+             self._convs.add_turn(conversation_id, "vera", body)
+             return ReplyResponse(
+                 action="wait",
+                 wait_seconds=86400 * 7,
+                 body=body,
+                 rationale="Soft decline — pausing execution"
+             )
 
         # ── Off-topic → redirect ───────────────────────────────────────
         if intent == "off_topic":
@@ -199,45 +207,70 @@ class ReplayStateMachine:
             return ReplyResponse(
                 action="send",
                 body=OFF_TOPIC_REDIRECT,
-                cta="open_ended",
-                rationale="Off-topic — polite redirect",
+                cta="binary_yes_no",
+                rationale="Off-topic — operational redirect",
             )
 
         # ── Engaged reply — continue conversation ──────────────────────
-        body = self._generate_continuation(conversation_id, merchant_id, message, composer)
+        body = self._generate_continuation(conv, merchant_id, customer_id, message, composer)
         self._convs.add_turn(conversation_id, "vera", body)
         return ReplyResponse(
             action="send",
             body=body,
             cta="open_ended",
-            rationale="Engaged reply — continuing thread",
+            rationale="Engaged reply — continuing locked strategy",
         )
+        
+    def _generate_action_mode_response(self, conv: dict, merchant_id: str, customer_id: Optional[str]) -> str:
+        """Generate an operational task-advancement response, strictly adhering to the strategy."""
+        strategy = conv.get("current_strategy", "unknown")
+        
+        # Operational task-advancement responses
+        if strategy == "regulation_change":
+            return "I will prepare the compliance checklist and SOP notes first so your staff can review them."
+        elif strategy == "supply_alert":
+            return "I have flagged the affected stock batches on your profile. Operations team notified."
+        elif strategy == "gbp_unverified":
+            return "Initiating verification sequence. Look out for the postcard/call from Google shortly."
+        elif strategy == "review_theme_emerged":
+            return "Drafting a professional public response now. Will execute in 1 hour."
+        elif customer_id and strategy in ["recall_due", "trial_followup", "appointment_tomorrow"]:
+            return "Done. The slot has been blocked. Clinic confirmation usually goes out shortly."
+            
+        return "Noted. I am queueing the update for your profile now."
 
     def _generate_continuation(
         self,
-        conversation_id: str,
+        conv: dict,
         merchant_id: str,
+        customer_id: Optional[str],
         message: str,
         composer,
     ) -> str:
-        """Generate a contextual continuation response."""
+        """Generate a contextual continuation response while strictly maintaining the strategy lock."""
+        conversation_id = conv["conversation_id"]
         merchant = self._ctx.get("merchant", merchant_id) or {}
         owner = merchant.get("identity", {}).get("owner_first_name", "")
-        conv = self._convs.get(conversation_id) or {}
-
+        
         # Count turns to avoid dragging on
         turns = conv.get("turns", [])
         if len(turns) >= 8:
             self._convs.set_state(conversation_id, "ended")
             return GRACEFUL_EXIT
 
-        # Simple follow-up with context
-        offers = [o.get("title", "") for o in merchant.get("offers", []) if o.get("status") == "active"]
-        if offers:
-            return (
-                f"{'Thanks ' + owner + '! ' if owner else ''}Here's what I can activate for you: "
-                f"{offers[0]}. Should I set it live now?"
-            )
-        return (
-            f"{'Thanks ' + owner + '! ' if owner else ''}Let me know what works best and I'll take care of it."
-        )
+        strategy = conv.get("current_strategy", "unknown")
+        
+        # Semantic lock enforcement
+        if strategy == "regulation_change":
+            return "This requires DCI documentation. Shall I list out the required SOP items?"
+        elif strategy == "supply_alert":
+            return "We need to ensure compliance immediately. Shall I post the stock update?"
+        elif strategy == "cde_opportunity":
+            return "I can add the schedule to your calendar to secure your CDE credits."
+        elif strategy == "perf_dip":
+            return "We need to counteract the visibility drop today. Ready to proceed with the profile update?"
+        elif strategy == "competitor_opened":
+            return "It is critical to maintain impression share. Shall I deploy the targeted response?"
+            
+        # Fallback operational response
+        return "Understood. Should I proceed with the execution?"

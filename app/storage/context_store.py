@@ -100,6 +100,8 @@ class ConversationStore:
                 "auto_reply_count": 0,
                 "body_hashes": set(),
                 "created_at": datetime.now(timezone.utc).isoformat(),
+                "current_strategy": None,
+                "intent_phase": "initial",
             }
             self._conversations[conv_id] = conv
             return conv

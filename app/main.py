@@ -94,7 +94,11 @@ def root():
 # ── /v1/healthz ────────────────────────────────────────────────────────
 @app.get("/v1/healthz")
 def healthz():
-    return {"status": "ok"}
+    return {
+        "status": "ok",
+        "uptime_seconds": int(time.time() - _start_time),
+        "contexts_loaded": _context_store.count_by_scope()
+    }
 
 
 # ── /v1/metadata ───────────────────────────────────────────────────────
@@ -102,9 +106,12 @@ def healthz():
 def metadata():
     return {
         "name": "Vera AI",
-        "version": "1.0.0",
-        "provider": "gemini",
-        "model": "gemini-2.5-flash",
+        "team_name": TEAM_NAME,
+        "team_members": TEAM_MEMBERS,
+        "version": VERSION,
+        "provider": LLM_PROVIDER,
+        "model": LLM_MODEL,
+        "approach": "deterministic",
         "deterministic": True,
         "status": "running"
     }

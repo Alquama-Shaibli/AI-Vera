@@ -49,7 +49,7 @@ def test_commitment_sends_action(sm):
     r = sm.handle_reply("c2", "m001", None, "Yes, let's do it! What's next?", 2)
     assert r.action == "send"
     body_lower = r.body.lower()
-    assert any(w in body_lower for w in ["on it", "perfect", "confirm", "done", "handling"])
+    assert any(w in body_lower for w in ["noted", "queueing", "flagged", "drafting", "initiating", "done", "prepare"])
 
 
 def test_auto_reply_first_probes(sm):
